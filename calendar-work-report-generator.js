@@ -1,151 +1,116 @@
-function summarizeWorkEventsReport() {
-    // Retrieve the calendar named "Project Manager [WH]"
-    var name = "Project Manager [WH]"
-    var calendars = CalendarApp.getCalendarsByName(name);
+// Configuration object for calendar and report settings
+const CONFIG = {
+    calendarName: "Project Manager [WH]",         // Name of the calendar to extract events from
+    startDate: new Date("2025-05-01T00:00:00"),   // Start date for event filtering
+    endDate: new Date("2025-06-01T00:00:00"),     // End date for event filtering
+    emailAddress: "imriwain@gmail.com",           // Recipient email for the report
+    targetColors: { "": "Work" },                 // Filter events by calendar color ("" = default)
+  };
+  
+  // Main function that generates and sends the work events report
+  function summarizeWorkEventsReport() {
+    const calendar = getCalendarByName(CONFIG.calendarName);
+    if (!calendar) return; // Abort if calendar is not found
+  
+    const events = getFilteredEvents(calendar, CONFIG.startDate, CONFIG.endDate, CONFIG.targetColors);
+    const htmlReport = generateHtmlReport(events);
+    sendEmailReport(CONFIG.emailAddress, htmlReport);
+  }
+  
+  // Retrieves a calendar object by its name
+  function getCalendarByName(name) {
+    const calendars = CalendarApp.getCalendarsByName(name);
     if (calendars.length === 0) {
-      Logger.log("No calendar found with the name '" + name + "'");
-      return;
+      Logger.log(`No calendar found with name '${name}'`);
+      return null;
     }
-    var calendar = calendars[0];
+    return calendars[0]; // Return the first matching calendar
+  }
   
-    // Define the time range (e.g., March 2025)
-    var startDate = new Date("2025-05-01T00:00:00");
-    var endDate = new Date("2025-06-01T00:00:00");
+  // Filters calendar events based on the configured date range and target colors
+  function getFilteredEvents(calendar, startDate, endDate, colorMap) {
+    const events = calendar.getEvents(startDate, endDate);
+    return events
+      .filter(event => colorMap.hasOwnProperty(event.getColor())) // Match only events with specified color
+      .map(event => ({
+        title: event.getTitle(),
+        description: cleanHtmlDescription(event.getDescription()),
+        startTime: event.getStartTime(),
+        endTime: event.getEndTime(),
+        duration: (event.getEndTime() - event.getStartTime()) / (1000 * 60 * 60), // Duration in hours
+      }));
+  }
   
-    // Fetch events from the specified calendar within the time range.
-    var events = calendar.getEvents(startDate, endDate);
+  // Generates an HTML table report from the filtered events list
+  function generateHtmlReport(events) {
+    const timeZone = Session.getScriptTimeZone();
+    const sortedEvents = [...events].sort((a, b) => a.startTime - b.startTime);
+    let html = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%;">';
   
-    // Define the target color: Empty string ("") will be renamed as "Work"
-    var targetColors = { "": "Work" };
+    // Calculate and display total work hours
+    const totalWorkHours = sortedEvents.reduce((sum, e) => sum + e.duration, 0);
+    html += `<tr style="background-color: #cccccc;"><td colspan="6"><strong>Total Work Hours: ${totalWorkHours.toFixed(2)} hours</strong></td></tr>`;
   
-    // Array to hold detailed info for each relevant event.
-    var eventDetails = [];
-    
-    // Variable to accumulate total work hours across all events.
-    var totalWorkHours = 0;
+    let currentDay = "", dailyTotal = 0, eventCounter = 0;
   
-    // Loop through events, processing only those that match the target color.
-    events.forEach(function(event) {
-      var colorId = event.getColor();
-      if (targetColors.hasOwnProperty(colorId)) {
-        var durationHours = (event.getEndTime() - event.getStartTime()) / (1000 * 60 * 60);
-        
-        // Sum up the overall total work hours.
-        totalWorkHours += durationHours;
-        
-        // Clean the event description.
-        var rawDescription = event.getDescription();
-        var cleanedDescription = cleanHtmlDescription(rawDescription);
-        
-        // Gather event details.
-        eventDetails.push({
-          title: event.getTitle(),
-          description: cleanedDescription,
-          startTime: event.getStartTime(),
-          endTime: event.getEndTime(),
-          duration: durationHours
-        });
-      }
-    });
+    sortedEvents.forEach((event, index) => {
+      const dayStr = Utilities.formatDate(event.startTime, timeZone, "dd.MM.yyyy");
   
-    // Sort events by start time.
-    eventDetails.sort(function(a, b) {
-      return a.startTime - b.startTime;
-    });
-  
-    var timeZone = Session.getScriptTimeZone();
-  
-    // Build the comprehensive events table.
-    // The table includes:
-    // - A top row displaying the total work hours (colspan all 6 columns).
-    // - A header row for each new day (displaying the date in DD.MM.YYYY format).
-    // - A row header for event detail columns.
-    // - Rows for each event.
-    // - A daily summary row showing the total work hours for that day.
-    // - A divider row between days.
-    var eventHtml = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%;">';
-    
-    // Add a top row for total work hours.
-    eventHtml += '<tr style="background-color: #cccccc;"><td colspan="6"><strong>Total Work Hours: ' 
-                 + totalWorkHours.toFixed(2) + ' hours</strong></td></tr>';
-    
-    // Initialize variables for day grouping.
-    var currentDay = "";
-    var dailyTotal = 0;
-    var eventCounter = 0;
-  
-    eventDetails.forEach(function(detail) {
-      // Format the event day as DD.MM.YYYY.
-      var dayStr = Utilities.formatDate(detail.startTime, timeZone, "dd.MM.yyyy");
-  
-      // When the day changes, finish the previous day (if any), then add a header for the new day.
+      // New day block
       if (dayStr !== currentDay) {
-        // If it's not the first day, add the daily summary and a divider row.
-        if (currentDay !== "") {
-          eventHtml += '<tr style="background-color: #f0f0f0;"><td colspan="6"><strong>Daily Work Hours Summary: ' 
-                       + dailyTotal.toFixed(2) + ' hours</strong></td></tr>';
-          eventHtml += '<tr><td colspan="6" style="border-bottom: 2px solid #000;"></td></tr>';
+        if (currentDay) {
+          // End summary for the previous day
+          html += `<tr style="background-color: #f0f0f0;"><td colspan="6"><strong>Daily Work Hours Summary: ${dailyTotal.toFixed(2)} hours</strong></td></tr>`;
+          html += `<tr><td colspan="6" style="border-bottom: 2px solid #000;"></td></tr>`;
         }
+  
+        // Initialize new day
         currentDay = dayStr;
         dailyTotal = 0;
         eventCounter = 0;
-        // Add the header row for the new day.
-        eventHtml += '<tr style="background-color: #d0d0d0;"><td colspan="6"><strong>Date: ' 
-                     + currentDay + '</strong></td></tr>';
-        // Add a row with column headers for event details.
-        eventHtml += '<tr style="font-weight: bold;">'
-                   + '<td>Event #</td><td>Title</td><td>Description</td><td>Start Time</td><td>End Time</td><td>Duration (hours)</td>'
-                   + '</tr>';
+  
+        // Day header and table columns
+        html += `<tr style="background-color: #d0d0d0;"><td colspan="6"><strong>Date: ${currentDay}</strong></td></tr>`;
+        html += `<tr style="font-weight: bold;"><td>Event #</td><td>Title</td><td>Description</td><td>Start Time</td><td>End Time</td><td>Duration (hours)</td></tr>`;
       }
   
+      // Append event row
       eventCounter++;
-      dailyTotal += detail.duration;
-  
-      // Add the event row.
-      eventHtml += '<tr>';
-      eventHtml += '<td>' + eventCounter + '</td>';
-      eventHtml += '<td>' + detail.title + '</td>';
-      // Replace newline characters with <br> tags for HTML formatting.
-      eventHtml += '<td>' + detail.description.replace(/\n/g, "<br>") + '</td>';
-      eventHtml += '<td>' + Utilities.formatDate(detail.startTime, timeZone, "HH:mm") + '</td>';
-      eventHtml += '<td>' + Utilities.formatDate(detail.endTime, timeZone, "HH:mm") + '</td>';
-      eventHtml += '<td>' + detail.duration.toFixed(2) + '</td>';
-      eventHtml += '</tr>';
+      dailyTotal += event.duration;
+      html += `<tr>
+        <td>${eventCounter}</td>
+        <td>${event.title}</td>
+        <td>${event.description.replace(/\n/g, "<br>")}</td>
+        <td>${Utilities.formatDate(event.startTime, timeZone, "HH:mm")}</td>
+        <td>${Utilities.formatDate(event.endTime, timeZone, "HH:mm")}</td>
+        <td>${event.duration.toFixed(2)}</td>
+      </tr>`;
     });
   
-    // Add the daily summary for the last day.
-    if (currentDay !== "") {
-      eventHtml += '<tr style="background-color: #f0f0f0;"><td colspan="6"><strong>Daily Work Hours Summary: ' 
-                  + dailyTotal.toFixed(2) + ' hours</strong></td></tr>';
+    // Final day summary
+    if (currentDay) {
+      html += `<tr style="background-color: #f0f0f0;"><td colspan="6"><strong>Daily Work Hours Summary: ${dailyTotal.toFixed(2)} hours</strong></td></tr>`;
     }
-    
-    eventHtml += '</table>';
   
-    // Log the HTML output (for debugging or preview).
-    Logger.log(eventHtml);
-  
-    // Send the comprehensive report via email using the HTML body.
-    var emailAddress = "imriwain@gmail.com"; // Replace with your email address.
-    var subject = "Comprehensive Work Report for " + Utilities.formatDate(startDate, timeZone, "MMMM yyyy");
-    MailApp.sendEmail({
-      to: emailAddress,
-      subject: subject,
-      htmlBody: eventHtml
-    });
+    html += '</table>';
+    return html;
   }
   
-  // Helper function to clean HTML tags from the description.
-  // It replaces <br> with newlines, removes <span> tags,
-  // and converts <ul>/<li> into a plain list with bullet points.
+  // Sends the HTML report via email
+  function sendEmailReport(to, htmlBody) {
+    const subject = `Comprehensive Work Report for ${Utilities.formatDate(CONFIG.startDate, Session.getScriptTimeZone(), "MMMM yyyy")}`;
+    MailApp.sendEmail({ to, subject, htmlBody });
+  }
+  
+  // Cleans up HTML descriptions from calendar events into plain text format
   function cleanHtmlDescription(html) {
-    if (!html) return "";
     return html
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<span>/gi, "")
+      ?.replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<span[^>]*>/gi, "")
       .replace(/<\/span>/gi, "")
       .replace(/<ul>/gi, "")
       .replace(/<\/ul>/gi, "")
       .replace(/<li>/gi, "• ")
-      .replace(/<\/li>/gi, "\n");
+      .replace(/<\/li>/gi, "\n") || "";
   }
   
