@@ -1,42 +1,87 @@
-# Calendar Work Report Generator
+# 📅 Google Calendar Work Report Generator
 
-Google Apps Script for summarizing Google Calendar events tagged as "Work" into a comprehensive HTML report. The script calculates total and daily work hours, formats events into an HTML table, and emails the report.
+This script generates and emails a work report based on Google Calendar events. Events are filtered by color and reported in either **robust** or **minimal** format.
 
-## Features
+---
 
-- Fetches events from a specified calendar and time range
-- Filters events by specific color (e.g., "" for "Work")
-- Cleans and formats event descriptions
-- Sorts events chronologically
-- Groups events by date with daily totals
-- Sends a styled HTML report via email
+## 🔧 Configuration
 
-## Example Output
+Defined in the `CONFIG` object:
 
-The email contains:
-- Total work hours at the top
-- Daily grouped sections with:
-  - Event number
-  - Title
-  - Description
-  - Start/End times
-  - Duration
-- Daily summaries
+- `calendarName`: Name of the Google Calendar to pull events from
+- `startDate` / `endDate`: Date range to filter events
+- `emailAddress`: Recipient of the final report
+- `targetColors`: Color key for filtering relevant events (e.g. `{ "": "Work" }`)
+- `reportMode`: `"robust"` for detailed reports or `"minimal"` for daily/hour summaries
 
-## Installation
+---
 
-1. Open [Google Apps Script](https://script.google.com/)
-2. Create a new project
-3. Copy the script code into the editor
-4. Replace the calendar name and email address as needed
-5. Save and run the function `summarizeWorkEventsReport`
+## 📊 Report Modes
 
-## Customization
+### 🔍 Robust Report
+Detailed HTML table with:
+- Event title, description, start/end time
+- Duration
+- Grouped by day with daily summaries
+- Total hours at the top
 
-- **Calendar Name:** Change the `name` variable to match your calendar.
-- **Target Color(s):** Modify the `targetColors` object to include different color IDs and labels.
-- **Date Range:** Adjust `startDate` and `endDate` to the desired reporting period.
+### 🧾 Minimal Report
+Condensed HTML table with:
+- Total work hours for the entire month
+- Per-day work hour summary
 
-## License
+---
 
-MIT License
+## 📤 Output
+
+The report is emailed using Google Apps Script's `MailApp.sendEmail` with HTML formatting.
+
+---
+
+## 🔁 Flow Overview
+
+1. `summarizeWorkEventsReport()` – Main entry point
+2. `getCalendarByName()` – Finds the calendar by name
+3. `getFilteredEvents()` – Filters events by date and color
+4. `generateMinimalReport()` or `generateRobustReport()` – Depending on selected mode
+5. `sendEmailReport()` – Emails the formatted HTML report
+
+---
+
+## 🧹 HTML Cleanup
+
+Descriptions are sanitized using `cleanHtmlDescription()`:
+- Converts `<br>`, `<li>`, and other elements to plaintext
+- Removes span and list containers
+
+---
+
+## 📌 Requirements
+
+- Google Apps Script environment
+- Access to the target Google Calendar
+- Valid email address for delivery
+
+---
+
+## ✅ Example Usage
+
+To generate a minimal report:
+
+```js
+CONFIG.reportMode = "minimal";
+summarizeWorkEventsReport();
+
+---
+
+To switch to a robust report:
+
+js
+Copy
+Edit
+
+
+```js
+CONFIG.reportMode = "robust";
+summarizeWorkEventsReport();
+---
