@@ -8,7 +8,7 @@ const CONFIG = {
     calendarName: "Project Manager [WH]",
     startDate: new Date("2025-05-01T00:00:00"),
     endDate: new Date("2025-06-01T00:00:00"),
-    emailAddress: "imriwain@gmail.com",
+    emailAddress: "EMAIL_ADDRESS@gmail.com",
     targetColors: { "": "Work" }, // Events with this color are considered "Work"
     reportMode: FORMAT[0], // Options: "robust" or "minimal"
   };
